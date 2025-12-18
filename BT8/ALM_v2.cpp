@@ -1,0 +1,199 @@
+#include <iostream>
+#include <iomanip>
+#include <cmath>
+#include <functional>
+#include <vector>
+#include <algorithm>
+using namespace std;
+double goldenSection(const function<double(double)> &func, double a, double b, double tol = 1e-6)
+{
+    const double gr = (sqrt(5) + 1) / 2;
+    double c = b - (b - a) / gr;
+    double d = a + (b - a) / gr;
+    while (fabs(c - d) > tol)
+    {
+        if (func(c) < func(d))
+            b = d;
+        else
+            a = c;
+        c = b - (b - a) / gr;
+        d = a + (b - a) / gr;
+    }
+    return (b + a) / 2;
+}
+vector<double> powellMethod(const function<double(double, double)> &func,
+                            vector<double> iniGuess, double tol, int maxIter = 100)
+{
+    int count = 1;
+    double searchRange[] = {-1, 1};
+    vector<vector<double>> directions = {{1, 0}, {0, 1}};
+    vector<double> X = iniGuess;
+    vector<double> Y = X;
+    int n = directions.size();
+    bool doLoop = true;
+    while (doLoop && count <= maxIter)
+    {
+        for (int q = 0; q < n; ++q)
+        {
+            auto func_gS = [&](double alphaValue)
+            {
+                return func(X[0] + alphaValue * directions[q][0], X[1] + alphaValue *
+                                                                             directions[q][1]);
+            };
+            double alphaOpti = goldenSection(func_gS, searchRange[0], searchRange[1]);
+            X[0] += alphaOpti * directions[q][0];
+            X[1] += alphaOpti * directions[q][1];
+            if (q == n - 1)
+            {
+                count++;
+                vector<double> newDir = {X[0] - Y[0], X[1] - Y[1]};
+                double normNewDir = sqrt(newDir[0] * newDir[0] + newDir[1] * newDir[1]);
+                if (normNewDir > 0)
+                {
+                    directions.push_back({newDir[0] / normNewDir, newDir[1] / normNewDir});
+                    directions.erase(directions.begin());
+                }
+                Y = X;
+                alphaOpti = goldenSection(func_gS, searchRange[0], searchRange[1]);
+                X[0] += alphaOpti * directions[q][0];
+                X[1] += alphaOpti * directions[q][1];
+                double diffNorm = sqrt(pow(Y[0] - X[0], 2) + pow(Y[1] - X[1], 2));
+                if (diffNorm < tol)
+                {
+                    doLoop = false;
+                }
+            }
+            if (count == maxIter)
+            {
+                directions = {{1, 0}, {0, 1}};
+                count = 1;
+                break;
+            }
+        }
+    }
+    if (count > maxIter)
+    {
+        cout << "No solution found after " << maxIter << " iterations" << endl;
+        return {};
+    }
+    return X;
+}
+pair<vector<double>, double> augmentedLagrangian(
+    const function<double(double, double)> &Ffunc,
+    const vector<function<double(double, double)>> &gFuncs,
+    const vector<function<double(double, double)>> &HFuncs, vector<double> iniGuess, double tol)
+{
+    vector<double> lagrangeMultipliers(gFuncs.size(), 1.0);
+    vector<double> lagrangeMultipliersH(HFuncs.size(), 1.0);
+    double penaltyParameter = 1.0;
+    double gamma = 1.5;
+    double penaltyMax = 10.0;
+    vector<double> x0 = iniGuess;
+    bool doLoop = true;
+    vector<double> minX;
+    double minFuncValue = 0.0;
+    while (doLoop)
+    {
+        auto Afunc = [&](double x1, double x2)
+        {
+            double penalty = Ffunc(x1, x2);
+            for (int i = 0; i < gFuncs.size(); ++i)
+            {
+                penalty += lagrangeMultipliers[i] * max(gFuncs[i](x1, x2), -lagrangeMultipliers[i] / (2 * penaltyParameter)) + penaltyParameter * max(gFuncs[i](x1, x2), -lagrangeMultipliers[i] / (2 *
+                                                                                                                                                                                                    penaltyParameter));
+            }
+            for (int j = 0; j < HFuncs.size(); ++j)
+            {
+                penalty += lagrangeMultipliersH[j] * HFuncs[j](x1, x2) + penaltyParameter * pow(HFuncs[j](x1, x2), 2);
+            }
+            return penalty;
+        };
+        minX = powellMethod(Afunc, x0, 1e-6);
+        if (minX.empty())
+        {
+            return {{}, 0.0};
+        }
+        
+        // Print iteration results in table format
+        static int iterNum = 1;
+        if (iterNum == 1) {
+            cout << "+------------+---------------+---------------+---------------+-----------------+" << endl;
+            cout << "|   Lambda   |       r       |      x1       |      x2       |   Value of h    |" << endl;
+            cout << "+------------+---------------+---------------+---------------+-----------------+" << endl;
+        }
+        
+        // Print Lambda (h constraints)
+        double lambda = (lagrangeMultipliersH.size() > 0) ? lagrangeMultipliersH[0] : 0.0;
+        cout << "| " << setw(10) << setprecision(6) << fixed << lambda << " | ";
+        
+        // Print r (penalty parameter)
+        cout << setw(13) << setprecision(6) << fixed << penaltyParameter << " | ";
+        
+        // Print x1, x2
+        cout << setw(13) << setprecision(6) << fixed << minX[0] << " | ";
+        cout << setw(13) << setprecision(6) << fixed << minX[1] << " | ";
+        
+        // Print value of h constraints
+        double hValue = 0.0;
+        if (HFuncs.size() > 0) {
+            hValue = HFuncs[0](minX[0], minX[1]);
+        }
+        cout << setw(15) << setprecision(6) << fixed << hValue << " |" << endl;
+        cout << "+------------+---------------+---------------+---------------+-----------------+" << endl;
+        
+        iterNum++;
+        if (sqrt(pow(minX[0] - x0[0], 2) + pow(minX[1] - x0[1], 2)) < tol)
+        {
+            doLoop = false;
+            minFuncValue = Afunc(minX[0], minX[1]);
+        }
+        else
+        {
+            x0 = minX;
+        }
+        for (int i = 0; i < gFuncs.size(); ++i)
+        {
+            lagrangeMultipliers[i] += 2 * penaltyParameter * max(gFuncs[i](minX[0], minX[1]), -lagrangeMultipliers[i] / (2 * penaltyParameter));
+        }
+        for (int j = 0; j < HFuncs.size(); ++j)
+        {
+            lagrangeMultipliersH[j] += 2 * penaltyParameter * HFuncs[j](minX[0], minX[1]);
+        }
+        // penaltyParameter *= gamma;
+        // if (penaltyParameter > penaltyMax)
+        // {
+        //     penaltyParameter = penaltyMax;
+        // }
+    }
+    return {minX, minFuncValue};
+}
+int main()
+{
+    // Hàm mục tiêu: f(X) = 6x1² + 4x1x2 + 3x2²
+    auto Ffunc = [](double x1, double x2)
+    {
+        return 6 * pow(x1, 2) + 4 * x1 * x2 + 3 * pow(x2, 2);
+    };
+    
+    vector<function<double(double, double)>> gFuncs = {};
+   // h(X) = x1 + x2 - 5 = 0
+    vector<function<double(double, double)>> HFuncs = {
+        [](double x1, double x2)
+        {
+            return x1 + x2 - 5;
+        }};
+        
+    vector<double> iniGuess = {1, 1};
+    double tol = 1e-5;
+    auto result = augmentedLagrangian(Ffunc, gFuncs, HFuncs, iniGuess, tol);
+    if (result.first.empty())
+    {
+        cout << "No solution." << endl;
+    }
+    else
+    {
+        cout << "Minimizing point: (" << result.first[0] << ", " << result.first[1] << ")\n";
+        cout << "Minimum function value: " << result.second << endl;
+    }
+    return 0;
+}
