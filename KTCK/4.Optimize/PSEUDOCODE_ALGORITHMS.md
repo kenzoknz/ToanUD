@@ -3,7 +3,7 @@
 ## 1. GRADIENT DESCENT (Không có Momentum)
 
 ### Mô tả
-Thuật toán tối ưu hóa cơ bản sử dụng gradient để di chuyển theo hướng giảm dần của hàm mục tiêu.
+Thuật toán tối ưu hóa cơ bản sử dụng gradient để di chuyển theo hướng giảm dần của hàm mục [tiêu](https://gitlab.com/libeigen/eigen).
 
 ### Pseudocode
 
@@ -148,6 +148,66 @@ x ← x + v                                       // Cộng velocity
 ### Nhược điểm
 - Thêm hyperparameter (alpha) cần điều chỉnh
 - Có thể vọt qua (overshoot) điểm cực tiểu nếu α quá lớn
+
+### Sơ đồ khối (Flowchart - Dọc)
+
+```mermaid
+flowchart TD
+    Start([Bắt đầu]) --> Input[/Nhập: x_init, γ, α, max_iter, ε/]
+    Input --> Init["Khởi tạo:<br/>x ← x_init<br/>v ← 0<br/>iterations ← 0"]
+    Init --> LoopCheck{iterations < max_iter?}
+    
+    LoopCheck -->|No| MaxIter[/"In: Max iterations reached<br/>without convergence"/]
+    MaxIter --> ReturnFinal["Return: x, f(x)"]
+    ReturnFinal --> End([Kết thúc])
+    
+    LoopCheck -->|Yes| Increment["iterations ← iterations + 1"]
+    Increment --> SavePrev["x_prev ← x"]
+    SavePrev --> CalcGrad["grad ← f'(x)<br/>(Tính gradient)"]
+    
+    CalcGrad --> UpdateVel["v ← α × v + γ × grad<br/>(Cập nhật velocity)"]
+    UpdateVel --> UpdateX["x ← x - v<br/>(Cập nhật tham số)"]
+    
+    UpdateX --> PrintCheck{iterations % 100 == 0<br/>OR<br/>iterations ≤ 5?}
+    PrintCheck -->|Yes| Print[/"In: Iter, x, f(x), grad"/]
+    PrintCheck -->|No| Convergence
+    Print --> Convergence
+    
+    Convergence{"abs(x - x_prev) < ε?"}
+    Convergence -->|No| LoopCheck
+    
+    Convergence -->|Yes| Success[/"In: Convergence reached<br/>after iterations iterations"/]
+    Success --> PrintResult[/"In: Optimal x, f(x)"/]
+    PrintResult --> ReturnOpt["Return: x, f(x)"]
+    ReturnOpt --> End
+    
+    style Start fill:#e1f5e1
+    style End fill:#ffe1e1
+    style Convergence fill:#fff4e1
+    style LoopCheck fill:#e1f0ff
+    style UpdateVel fill:#ffe1f0
+    style UpdateX fill:#f0e1ff
+```
+
+### Giải thích các bước chính
+
+1. **Khởi tạo**: 
+   - x = điểm xuất phát
+   - v = 0 (velocity ban đầu)
+
+2. **Vòng lặp**:
+   - Tính gradient: `grad = f'(x)`
+   - Cập nhật velocity với momentum: `v = α·v + γ·grad`
+   - Di chuyển điểm: `x = x - v`
+
+3. **Kiểm tra hội tụ**:
+   - Nếu `|x - x_prev| < ε`: đã hội tụ → dừng
+   - Ngược lại: tiếp tục lặp
+
+4. **Momentum effect**:
+   - Velocity tích lũy từ các bước trước (α·v)
+   - Thêm gradient hiện tại (γ·grad)
+   - Giúp vượt qua vùng phẳng và giảm dao động
 - Phức tạp hơn GD thường một chút
 
 ---

@@ -98,6 +98,6 @@ void solve(double a, double b, double c, double d)
 
 int main()
 {
-    solve(1, 2, 3, 4);
+    solve(2, 1, -13, 6);
     return 0;
 }
